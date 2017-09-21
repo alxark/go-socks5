@@ -158,9 +158,10 @@ func (s *Server) handleRequest(req *Request, conn net.Conn) error {
 // handleConnect is used to handle a connect command
 func (s *Server) handleConnect(ctx context.Context, nconn net.Conn, req *Request) error {
 	return s.config.HandleConnect(ctx, nconn, req, func(boundAddr net.Addr) error {
-		var bind AddrSpec
+		var bind *AddrSpec
 
 		if boundAddr != nil {
+			bind = &AddrSpec{}
 			switch bound := boundAddr.(type) {
 			case *net.TCPAddr:
 				bind.IP = bound.IP
@@ -178,7 +179,7 @@ func (s *Server) handleConnect(ctx context.Context, nconn net.Conn, req *Request
 			}
 		}
 
-		if err := sendReply(nconn, successReply, &bind); err != nil {
+		if err := sendReply(nconn, successReply, bind); err != nil {
 			return fmt.Errorf("Failed to send reply: %v", err)
 		}
 		return nil
