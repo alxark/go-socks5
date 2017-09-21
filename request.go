@@ -78,7 +78,7 @@ type Request struct {
 	DestAddr *AddrSpec
 	// AddrSpec of the actual destination (might be affected by rewrite)
 	realDestAddr *AddrSpec
-	bufConn      io.Reader
+	BufConn      io.Reader
 }
 
 type conn interface {
@@ -87,10 +87,10 @@ type conn interface {
 }
 
 // NewRequest creates a new Request from the tcp connection
-func NewRequest(bufConn io.Reader) (*Request, error) {
+func NewRequest(BufConn io.Reader) (*Request, error) {
 	// Read the version byte
 	header := []byte{0, 0, 0}
-	if _, err := io.ReadAtLeast(bufConn, header, 3); err != nil {
+	if _, err := io.ReadAtLeast(BufConn, header, 3); err != nil {
 		return nil, fmt.Errorf("Failed to get command version: %v", err)
 	}
 
@@ -100,7 +100,7 @@ func NewRequest(bufConn io.Reader) (*Request, error) {
 	}
 
 	// Read in the destination address
-	dest, err := readAddrSpec(bufConn)
+	dest, err := readAddrSpec(BufConn)
 	if err != nil {
 		return nil, err
 	}
@@ -109,7 +109,7 @@ func NewRequest(bufConn io.Reader) (*Request, error) {
 		Version:  socks5Version,
 		Command:  header[1],
 		DestAddr: dest,
-		bufConn:  bufConn,
+		BufConn:  BufConn,
 	}
 
 	return request, nil
@@ -234,7 +234,7 @@ func (s *Server) doHandleConnect(ctx context.Context, nconn net.Conn, req *Reque
 
 	// Start proxying
 	errCh := make(chan error, 2)
-	go proxy(target, req.bufConn, errCh)
+	go proxy(target, req.BufConn, errCh)
 	go proxy(conn, target, errCh)
 
 	// Wait
