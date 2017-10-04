@@ -78,7 +78,7 @@ type Request struct {
 	DestAddr *AddrSpec
 	// AddrSpec of the actual destination (might be affected by rewrite)
 	realDestAddr *AddrSpec
-	bufConn      io.Reader
+	BufConn      io.Reader
 }
 
 type conn interface {
@@ -87,10 +87,10 @@ type conn interface {
 }
 
 // NewRequest creates a new Request from the tcp connection
-func NewRequest(bufConn io.Reader) (*Request, error) {
+func NewRequest(BufConn io.Reader) (*Request, error) {
 	// Read the version byte
 	header := []byte{0, 0, 0}
-	if _, err := io.ReadAtLeast(bufConn, header, 3); err != nil {
+	if _, err := io.ReadAtLeast(BufConn, header, 3); err != nil {
 		return nil, fmt.Errorf("Failed to get command version: %v", err)
 	}
 
@@ -100,7 +100,7 @@ func NewRequest(bufConn io.Reader) (*Request, error) {
 	}
 
 	// Read in the destination address
-	dest, err := readAddrSpec(bufConn)
+	dest, err := readAddrSpec(BufConn)
 	if err != nil {
 		return nil, err
 	}
@@ -109,14 +109,14 @@ func NewRequest(bufConn io.Reader) (*Request, error) {
 		Version:  socks5Version,
 		Command:  header[1],
 		DestAddr: dest,
-		bufConn:  bufConn,
+		BufConn:  BufConn,
 	}
 
 	return request, nil
 }
 
 // handleRequest is used for request processing after authentication
-func (s *Server) handleRequest(req *Request, conn conn) error {
+func (s *Server) handleRequest(req *Request, conn net.Conn) error {
 	ctx := context.Background()
 
 	// Resolve the address if we have a FQDN
@@ -156,7 +156,50 @@ func (s *Server) handleRequest(req *Request, conn conn) error {
 }
 
 // handleConnect is used to handle a connect command
-func (s *Server) handleConnect(ctx context.Context, conn conn, req *Request) error {
+func (s *Server) handleConnect(ctx context.Context, nconn net.Conn, req *Request) error {
+	return s.config.HandleConnect(ctx, nconn, req, func(boundAddr net.Addr) error {
+		var bind *AddrSpec
+
+		if boundAddr != nil {
+			bind = &AddrSpec{}
+			switch bound := boundAddr.(type) {
+			case *net.TCPAddr:
+				bind.IP = bound.IP
+				bind.Port = bound.Port
+				break
+			case *net.UDPAddr:
+				bind.IP = bound.IP
+				bind.Port = bound.Port
+				break
+			case *net.IPAddr:
+				bind.IP = bound.IP
+				break
+			default:
+				return fmt.Errorf("Unknown network error for addr: %v", req.DestAddr)
+			}
+		}
+
+		if err := sendReply(nconn, successReply, bind); err != nil {
+			return fmt.Errorf("Failed to send reply: %v", err)
+		}
+		return nil
+	}, func(err error) error {
+		msg := err.Error()
+		resp := hostUnreachable
+		if strings.Contains(msg, "refused") {
+			resp = connectionRefused
+		} else if strings.Contains(msg, "network is unreachable") {
+			resp = networkUnreachable
+		}
+		if err := sendReply(nconn, resp, nil); err != nil {
+			return fmt.Errorf("Failed to send reply: %v", err)
+		}
+		return nil
+	})
+}
+
+func (s *Server) doHandleConnect(ctx context.Context, nconn net.Conn, req *Request, replySuccess func(boundAddr net.Addr) error, replyError func(err error) error) error {
+	conn := conn(nconn)
 	// Check if this is allowed
 	if ctx_, ok := s.config.Rules.Allow(ctx, req); !ok {
 		if err := sendReply(conn, ruleFailure, nil); err != nil {
@@ -176,47 +219,23 @@ func (s *Server) handleConnect(ctx context.Context, conn conn, req *Request) err
 	}
 	target, err := dial(ctx, "tcp", req.realDestAddr.Address())
 	if err != nil {
-		msg := err.Error()
-		resp := hostUnreachable
-		if strings.Contains(msg, "refused") {
-			resp = connectionRefused
-		} else if strings.Contains(msg, "network is unreachable") {
-			resp = networkUnreachable
-		}
-		if err := sendReply(conn, resp, nil); err != nil {
-			return fmt.Errorf("Failed to send reply: %v", err)
+		errorOnReply := replyError(err)
+		if errorOnReply != nil {
+			return errorOnReply
 		}
 		return fmt.Errorf("Connect to %v failed: %v", req.DestAddr, err)
 	}
 	defer target.Close()
 
 	// Send success
-	laddr := target.LocalAddr()
-	var bind AddrSpec
-
-	switch local := laddr.(type) {
-	case *net.TCPAddr:
-		bind.IP = local.IP
-		bind.Port = local.Port
-		break
-	case *net.UDPAddr:
-		bind.IP = local.IP
-		bind.Port = local.Port
-		break
-	case *net.IPAddr:
-		bind.IP = local.IP
-		break
-	default:
-		return fmt.Errorf("Unknown network error for addr: %v", req.DestAddr)
-	}
-
-	if err := sendReply(conn, successReply, &bind); err != nil {
-		return fmt.Errorf("Failed to send reply: %v", err)
+	errOnReply := replySuccess(target.LocalAddr())
+	if errOnReply != nil {
+		return errOnReply
 	}
 
 	// Start proxying
 	errCh := make(chan error, 2)
-	go proxy(target, req.bufConn, errCh)
+	go proxy(target, req.BufConn, errCh)
 	go proxy(conn, target, errCh)
 
 	// Wait

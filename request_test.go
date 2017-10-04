@@ -9,6 +9,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 )
 
 type MockConn struct {
@@ -19,8 +20,32 @@ func (m *MockConn) Write(b []byte) (int, error) {
 	return m.buf.Write(b)
 }
 
+func (m *MockConn) Read(b []byte) (int, error) {
+	return 0, nil
+}
+
+func (m *MockConn) SetDeadline(d time.Time) error {
+	return nil
+}
+
+func (m *MockConn) SetReadDeadline(d time.Time) error {
+	return nil
+}
+
+func (m *MockConn) SetWriteDeadline(d time.Time) error {
+	return nil
+}
+
+func (m *MockConn) LocalAddr() net.Addr {
+	return nil
+}
+
 func (m *MockConn) RemoteAddr() net.Addr {
 	return &net.TCPAddr{IP: []byte{127, 0, 0, 1}, Port: 65432}
+}
+
+func (m *MockConn) Close() error {
+	return nil
 }
 
 func TestRequest_Connect(t *testing.T) {
@@ -49,11 +74,11 @@ func TestRequest_Connect(t *testing.T) {
 	lAddr := l.Addr().(*net.TCPAddr)
 
 	// Make server
-	s := &Server{config: &Config{
+	s, _ := New(&Config{
 		Rules:    PermitAll(),
 		Resolver: DNSResolver{},
 		Logger:   log.New(os.Stdout, "", log.LstdFlags),
-	}}
+	})
 
 	// Create the connect request
 	buf := bytes.NewBuffer(nil)
@@ -124,11 +149,11 @@ func TestRequest_Connect_RuleFail(t *testing.T) {
 	lAddr := l.Addr().(*net.TCPAddr)
 
 	// Make server
-	s := &Server{config: &Config{
+	s, _ := New(&Config{
 		Rules:    PermitNone(),
 		Resolver: DNSResolver{},
 		Logger:   log.New(os.Stdout, "", log.LstdFlags),
-	}}
+	})
 
 	// Create the connect request
 	buf := bytes.NewBuffer(nil)
