@@ -15,7 +15,7 @@ const (
 )
 
 var (
-	log = golog.LoggerFor("socks5-request")
+	log = golog.LoggerFor("socks5")
 )
 
 // Config is used to setup and configure a Server
