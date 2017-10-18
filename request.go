@@ -8,6 +8,8 @@ import (
 	"strings"
 
 	"context"
+
+	"github.com/getlantern/golog"
 )
 
 const (
@@ -32,6 +34,7 @@ const (
 )
 
 var (
+	log                  = golog.LoggerFor("socks5-request")
 	unrecognizedAddrType = fmt.Errorf("Unrecognized address type")
 )
 
@@ -279,6 +282,8 @@ func (s *Server) handleAssociate(ctx context.Context, conn conn, req *Request) e
 	} else {
 		ctx = ctx_
 	}
+
+	log.Debug("Received associate command")
 
 	// TODO: Support associate
 	if err := sendReply(conn, commandNotSupported, nil); err != nil {
