@@ -3,15 +3,20 @@ package socks5
 import (
 	"bufio"
 	"fmt"
-	"log"
 	"net"
 	"os"
 
 	"context"
+
+	"github.com/getlantern/golog"
 )
 
 const (
 	socks5Version = uint8(5)
+)
+
+var (
+	log = golog.LoggerFor("socks5-request")
 )
 
 // Config is used to setup and configure a Server
