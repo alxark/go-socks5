@@ -280,8 +280,6 @@ func (s *Server) handleAssociate(ctx context.Context, conn conn, req *Request) e
 		ctx = ctx_
 	}
 
-	log.Debug("Received associate command")
-
 	// TODO: Support associate
 	if err := sendReply(conn, commandNotSupported, nil); err != nil {
 		return fmt.Errorf("Failed to send reply: %v", err)
