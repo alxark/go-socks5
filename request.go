@@ -8,8 +8,6 @@ import (
 	"strings"
 
 	"context"
-
-	"github.com/getlantern/golog"
 )
 
 const (
@@ -34,7 +32,6 @@ const (
 )
 
 var (
-	log                  = golog.LoggerFor("socks5-request")
 	unrecognizedAddrType = fmt.Errorf("Unrecognized address type")
 )
 
