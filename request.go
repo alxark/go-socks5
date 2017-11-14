@@ -8,6 +8,8 @@ import (
 	"strings"
 
 	"context"
+
+	"github.com/getlantern/netx"
 )
 
 const (
@@ -214,7 +216,7 @@ func (s *Server) doHandleConnect(ctx context.Context, nconn net.Conn, req *Reque
 	dial := s.config.Dial
 	if dial == nil {
 		dial = func(ctx context.Context, net_, addr string) (net.Conn, error) {
-			return net.Dial(net_, addr)
+			return netx.Dial(net_, addr)
 		}
 	}
 	target, err := dial(ctx, "tcp", req.realDestAddr.Address())
